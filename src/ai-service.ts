@@ -127,7 +127,7 @@ class OpenAIService implements IAIService {
 		const messages = [
 			{
 				role: "system",
-				content: this.settings.systemPrompt
+				content: "你是一个专业的写作助手。你的任务是根据用户提供的上下文和需求，生成连贯的文本内容。重要规则：\n1. 按照从上到下、从左到右的正常阅读顺序输出内容\n2. 直接输出要插入的内容，不要添加任何解释或说明\n3. 保持与前后文的自然衔接\n4. 严格按照正常的文字书写顺序生成"
 			},
 			{
 				role: "user",
@@ -163,25 +163,29 @@ class OpenAIService implements IAIService {
 					throw new Error(`API 请求失败: ${response.status}`);
 				}
 
-				// 处理流式响应
-				const lines = response.text.split("\n");
-				for (const line of lines) {
-					if (line.startsWith("data: ")) {
-						const data = line.substring(6);
-						if (data === "[DONE]") break;
-						
-						try {
-							const parsed = JSON.parse(data);
-							const content = parsed.choices?.[0]?.delta?.content;
-							if (content) {
-								fullResponse += content;
-								yield content;
-							}
-						} catch (e) {
-							// 忽略解析错误
+			// 处理流式响应
+			// 按行分割，保持原始顺序
+			const lines = response.text.split("\n").filter(line => line.trim());
+			
+			// 按照接收顺序处理每一行
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+				if (line.startsWith("data: ")) {
+					const data = line.substring(6).trim();
+					if (data === "[DONE]") break;
+					
+					try {
+						const parsed = JSON.parse(data);
+						const content = parsed.choices?.[0]?.delta?.content;
+						if (content) {
+							fullResponse += content;
+							yield content;
 						}
+					} catch (e) {
+						// 忽略解析错误
 					}
 				}
+			}
 
 				// 保存到缓存
 				if (this.settings.enableCache && fullResponse) {
@@ -244,12 +248,26 @@ class OpenAIService implements IAIService {
 	}
 
 	private buildPrompt(contextBefore: string, contextAfter: string, userRequest: string): string {
-		let prompt = "";
-		if (contextBefore) prompt += `【光标前的内容】\n${contextBefore}\n\n`;
-		prompt += `【光标位置】\n`;
-		if (contextAfter) prompt += `\n【光标后的内容】\n${contextAfter}\n\n`;
-		prompt += `【用户需求】\n${userRequest}\n\n`;
-		prompt += `请根据上下文和用户需求，生成应该插入到【光标位置】的内容。请直接输出内容，不要包含任何解释或元信息。`;
+		let prompt = "用户正在编辑文档，需要在光标位置插入新内容。\n\n";
+		
+		if (contextBefore) {
+			prompt += `=== 前文（光标之前的内容）===\n${contextBefore}\n\n`;
+		}
+		
+		prompt += `>>> 【光标位置：请在这里生成内容】 <<<\n\n`;
+		
+		if (contextAfter) {
+			prompt += `=== 后文（光标之后的内容）===\n${contextAfter}\n\n`;
+		}
+		
+		prompt += `=== 用户需求 ===\n${userRequest}\n\n`;
+		prompt += `=== 重要：生成规则 ===\n`;
+		prompt += `1. 根据前文和后文的上下文，生成应该插入到【光标位置】的内容\n`;
+		prompt += `2. 按照正常书写顺序：从开头写到结尾，从第一行写到最后一行\n`;
+		prompt += `3. 只输出要插入的内容本身，不要添加任何说明或解释\n`;
+		prompt += `4. 确保内容与前后文自然连贯\n\n`;
+		prompt += `请按照上述规则，现在开始生成内容：`;
+		
 		return prompt;
 	}
 
@@ -341,22 +359,26 @@ class GeminiService implements IAIService {
 					throw new Error(`Gemini API 请求失败: ${response.status}`);
 				}
 
-				// 处理流式响应
-				const lines = response.text.split("\n");
-				for (const line of lines) {
-					if (line.trim() && !line.startsWith("[")) {
-						try {
-							const parsed = JSON.parse(line);
-							const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-							if (content) {
-								fullResponse += content;
-								yield content;
-							}
-						} catch (e) {
-							// 忽略解析错误
+			// 处理流式响应
+			// 按行分割，保持原始顺序
+			const lines = response.text.split("\n").filter(line => line.trim());
+			
+			// 按照接收顺序处理每一行
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+				if (line.trim() && !line.startsWith("[")) {
+					try {
+						const parsed = JSON.parse(line);
+						const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+						if (content) {
+							fullResponse += content;
+							yield content;
 						}
+					} catch (e) {
+						// 忽略解析错误
 					}
 				}
+			}
 
 				// 保存到缓存
 				if (this.settings.enableCache && fullResponse) {
@@ -418,12 +440,26 @@ class GeminiService implements IAIService {
 	}
 
 	private buildPrompt(contextBefore: string, contextAfter: string, userRequest: string): string {
-		let prompt = this.settings.systemPrompt + "\n\n";
-		if (contextBefore) prompt += `【光标前的内容】\n${contextBefore}\n\n`;
-		prompt += `【光标位置】\n`;
-		if (contextAfter) prompt += `\n【光标后的内容】\n${contextAfter}\n\n`;
-		prompt += `【用户需求】\n${userRequest}\n\n`;
-		prompt += `请根据上下文和用户需求，生成应该插入到【光标位置】的内容。`;
+		let prompt = "用户正在编辑文档，需要在光标位置插入新内容。\n\n";
+		
+		if (contextBefore) {
+			prompt += `=== 前文（光标之前的内容）===\n${contextBefore}\n\n`;
+		}
+		
+		prompt += `>>> 【光标位置：请在这里生成内容】 <<<\n\n`;
+		
+		if (contextAfter) {
+			prompt += `=== 后文（光标之后的内容）===\n${contextAfter}\n\n`;
+		}
+		
+		prompt += `=== 用户需求 ===\n${userRequest}\n\n`;
+		prompt += `=== 重要：生成规则 ===\n`;
+		prompt += `1. 根据前文和后文的上下文，生成应该插入到【光标位置】的内容\n`;
+		prompt += `2. 按照正常书写顺序：从开头写到结尾，从第一行写到最后一行\n`;
+		prompt += `3. 只输出要插入的内容本身，不要添加任何说明或解释\n`;
+		prompt += `4. 确保内容与前后文自然连贯\n\n`;
+		prompt += `请按照上述规则，现在开始生成内容：`;
+		
 		return prompt;
 	}
 }
@@ -503,24 +539,29 @@ class CustomAIService implements IAIService {
 				throw new Error(`自定义 API 请求失败: ${response.status}`);
 			}
 
-			const lines = response.text.split("\n");
-			for (const line of lines) {
-				if (line.startsWith("data: ")) {
-					const data = line.substring(6);
-					if (data === "[DONE]") break;
-					
-					try {
-						const parsed = JSON.parse(data);
-						const content = parsed.choices?.[0]?.delta?.content;
-						if (content) {
-							fullResponse += content;
-							yield content;
-						}
-					} catch (e) {
-						// 忽略
+		// 处理流式响应
+		// 按行分割，保持原始顺序
+		const lines = response.text.split("\n").filter(line => line.trim());
+		
+		// 按照接收顺序处理每一行
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (line.startsWith("data: ")) {
+				const data = line.substring(6).trim();
+				if (data === "[DONE]") break;
+				
+				try {
+					const parsed = JSON.parse(data);
+					const content = parsed.choices?.[0]?.delta?.content;
+					if (content) {
+						fullResponse += content;
+						yield content;
 					}
+				} catch (e) {
+					// 忽略
 				}
 			}
+		}
 
 			if (this.settings.enableCache && fullResponse) {
 				const cacheKey = this.cache.getCacheKey(contextBefore, contextAfter, userRequest);
@@ -567,12 +608,26 @@ class CustomAIService implements IAIService {
 	}
 
 	private buildPrompt(contextBefore: string, contextAfter: string, userRequest: string): string {
-		let prompt = "";
-		if (contextBefore) prompt += `【光标前的内容】\n${contextBefore}\n\n`;
-		prompt += `【光标位置】\n`;
-		if (contextAfter) prompt += `\n【光标后的内容】\n${contextAfter}\n\n`;
-		prompt += `【用户需求】\n${userRequest}\n\n`;
-		prompt += `请根据上下文和用户需求，生成应该插入到【光标位置】的内容。`;
+		let prompt = "用户正在编辑文档，需要在光标位置插入新内容。\n\n";
+		
+		if (contextBefore) {
+			prompt += `=== 前文（光标之前的内容）===\n${contextBefore}\n\n`;
+		}
+		
+		prompt += `>>> 【光标位置：请在这里生成内容】 <<<\n\n`;
+		
+		if (contextAfter) {
+			prompt += `=== 后文（光标之后的内容）===\n${contextAfter}\n\n`;
+		}
+		
+		prompt += `=== 用户需求 ===\n${userRequest}\n\n`;
+		prompt += `=== 重要：生成规则 ===\n`;
+		prompt += `1. 根据前文和后文的上下文，生成应该插入到【光标位置】的内容\n`;
+		prompt += `2. 按照正常书写顺序：从开头写到结尾，从第一行写到最后一行\n`;
+		prompt += `3. 只输出要插入的内容本身，不要添加任何说明或解释\n`;
+		prompt += `4. 确保内容与前后文自然连贯\n\n`;
+		prompt += `请按照上述规则，现在开始生成内容：`;
+		
 		return prompt;
 	}
 }

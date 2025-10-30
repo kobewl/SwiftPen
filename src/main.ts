@@ -160,26 +160,43 @@ export default class SwiftPenPlugin extends Plugin {
 				markerInserted = true;
 			}
 
-			// 流式生成
-			let isFirstChunk = true;
-			for await (const chunk of this.aiService.streamCompletion(
-				textBefore,
-				textAfter,
-				userRequest
-			)) {
-				generatedText += chunk;
+		// 流式生成
+		let isFirstChunk = true;
+		let insertPosition = editor.getCursor(); // 保存初始插入位置
+		
+		for await (const chunk of this.aiService.streamCompletion(
+			textBefore,
+			textAfter,
+			userRequest
+		)) {
+			generatedText += chunk;
 
-				// 实时插入到编辑器
-				const currentCursor = editor.getCursor();
-				editor.replaceRange(chunk, currentCursor, currentCursor);
-
-				// 第一个内容块到达时的提示
-				if (isFirstChunk) {
-					this.clearNotices();
-					new Notice("✨ 正在生成中...", 0);
-					isFirstChunk = false;
-				}
+			// 实时插入到编辑器 - 使用累积的插入位置
+			editor.replaceRange(chunk, insertPosition);
+			
+			// 更新插入位置到新插入内容的末尾
+			const chunkLines = chunk.split('\n');
+			if (chunkLines.length === 1) {
+				// 单行文本，列位置向后移动
+				insertPosition = {
+					line: insertPosition.line,
+					ch: insertPosition.ch + chunk.length
+				};
+			} else {
+				// 多行文本，移动到最后一行
+				insertPosition = {
+					line: insertPosition.line + chunkLines.length - 1,
+					ch: chunkLines[chunkLines.length - 1].length
+				};
 			}
+
+			// 第一个内容块到达时的提示
+			if (isFirstChunk) {
+				this.clearNotices();
+				new Notice("✨ 正在生成中...", 0);
+				isFirstChunk = false;
+			}
+		}
 
 			// 插入结束标记
 			if (this.settings.showGenerationMarkers) {
