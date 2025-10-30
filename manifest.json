@@ -1,0 +1,12 @@
+{
+  "id": "swiftpen",
+  "name": "SwiftPen",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "使用 AI 快速完成内容编写。按快捷键输入需求，让 AI 帮你完成剩余内容。",
+  "author": "wangliang",
+  "authorUrl": "",
+  "fundingUrl": "",
+  "isDesktopOnly": false
+}
+
