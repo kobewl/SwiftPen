@@ -1,7 +1,7 @@
 {
   "id": "swiftpen",
   "name": "SwiftPen",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "minAppVersion": "0.15.0",
   "description": "AI 智能写作助手。支持多种 AI 服务（OpenAI、Gemini、自定义），快速写作、智能翻译、生成标记，让创作更轻松！",
   "author": "wangliang",

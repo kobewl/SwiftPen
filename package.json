@@ -1,7 +1,7 @@
 {
-  "name": "swiftpen",
-  "version": "2.1.0",
-  "description": "AI 智能写作助手 - 支持多种 AI 服务、快速写作、一键翻译",
+	"name": "swiftpen",
+	"version": "2.2.0",
+	"description": "AI 智能写作助手 - 支持多种 AI 服务、快速写作、一键翻译",
     "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

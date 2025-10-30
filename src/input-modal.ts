@@ -27,67 +27,74 @@ export class InputModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass("swiftpen-input-modal");
 
-		// 标题
-		contentEl.createEl("h2", { text: "SwiftPen - AI 写作助手" });
+		// 标题栏
+		const header = contentEl.createDiv({ cls: "input-modal-header" });
+		header.createEl("span", { text: "✨", cls: "input-modal-icon" });
+		header.createEl("h3", { text: "AI 写作助手", cls: "input-modal-title" });
 
-		// 上下文预览
-		const contextContainer = contentEl.createDiv({ cls: "swiftpen-context-preview" });
+		// 描述
+		const descEl = contentEl.createDiv({ cls: "input-modal-description" });
+		descEl.setText("描述你的需求，AI 将基于当前上下文智能生成内容");
+
+		// 上下文预览（紧凑）
+		const contextContainer = contentEl.createDiv({ cls: "input-modal-context" });
 		contextContainer.createEl("div", {
-			text: "当前位置：",
-			cls: "swiftpen-context-label"
+			text: "📍 当前位置",
+			cls: "context-label"
 		});
 		contextContainer.createEl("div", {
 			text: this.contextPreview,
-			cls: "swiftpen-context-text"
+			cls: "context-text"
 		});
 
 		// 输入框
-		const inputContainer = contentEl.createDiv({ cls: "swiftpen-input-container" });
+		const inputContainer = contentEl.createDiv({ cls: "input-modal-input-container" });
+		inputContainer.createEl("label", { text: "写作需求", cls: "input-label" });
 		
-		new Setting(inputContainer)
-			.setName("写作需求")
-			.setDesc("告诉 AI 你想写什么，例如：'继续写这一段'、'帮我总结上述内容'、'用更专业的语气改写'")
-			.addText((text) => {
-				this.inputEl = text.inputEl;
-				text.inputEl.addClass("swiftpen-input-text");
-				text
-					.setPlaceholder("输入您的需求...")
-					.onChange((value) => {
-						this.userInput = value;
-						this.updateSubmitButton();
-					});
+		const textarea = inputContainer.createEl("textarea", {
+			cls: "input-textarea",
+			placeholder: "例如：\n• 继续写下一段\n• 用更专业的语气改写\n• 补充更多细节和例子"
+		});
+		textarea.rows = 4;
+		this.inputEl = textarea as any;
 
-				// 自动聚焦
-				setTimeout(() => {
-					text.inputEl.focus();
-				}, 50);
+		textarea.addEventListener("input", (e) => {
+			this.userInput = (e.target as HTMLTextAreaElement).value;
+			this.updateSubmitButton();
+		});
 
-				// 回车提交
-				text.inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
-					if (e.key === "Enter" && !e.shiftKey) {
-						e.preventDefault();
-						this.submit();
-					} else if (e.key === "Escape") {
-						e.preventDefault();
-						this.cancel();
-					}
-				});
-			});
+		// 自动聚焦
+		setTimeout(() => textarea.focus(), 50);
+
+		// 回车提交
+		textarea.addEventListener("keydown", (e: KeyboardEvent) => {
+			if (e.key === "Enter" && !e.shiftKey) {
+				e.preventDefault();
+				this.submit();
+			} else if (e.key === "Escape") {
+				e.preventDefault();
+				this.cancel();
+			}
+		});
+
+		// 提示信息
+		const hintEl = contentEl.createDiv({ cls: "input-modal-hint" });
+		hintEl.innerHTML = "<kbd>Enter</kbd> 提交 · <kbd>Shift + Enter</kbd> 换行 · <kbd>Esc</kbd> 取消";
 
 		// 按钮
-		const buttonContainer = contentEl.createDiv({ cls: "swiftpen-button-container" });
+		const buttonContainer = contentEl.createDiv({ cls: "input-modal-buttons" });
 
 		// 取消按钮
 		const cancelBtn = buttonContainer.createEl("button", {
-			text: "取消 (Esc)",
-			cls: "swiftpen-button swiftpen-button-cancel"
+			text: "取消",
+			cls: "btn btn-secondary"
 		});
 		cancelBtn.addEventListener("click", () => this.cancel());
 
 		// 提交按钮
 		this.submitButton = buttonContainer.createEl("button", {
-			text: "生成 (Enter)",
-			cls: "swiftpen-button swiftpen-button-submit"
+			text: "✨ 开始生成",
+			cls: "btn btn-primary"
 		});
 		this.submitButton.disabled = true;
 		this.submitButton.addEventListener("click", () => this.submit());
@@ -135,87 +142,157 @@ export class InputModal extends Modal {
 		const styleEl = document.createElement("style");
 		styleEl.textContent = `
 			.swiftpen-input-modal {
-				padding: 20px;
+				padding: 0;
+				max-width: 520px;
 			}
 
-			.swiftpen-context-preview {
-				background: var(--background-secondary);
-				padding: 12px;
-				border-radius: 6px;
-				margin: 16px 0;
-				max-height: 120px;
-				overflow-y: auto;
+			.input-modal-header {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 16px 20px 12px;
+				border-bottom: 1px solid var(--background-modifier-border);
 			}
 
-			.swiftpen-context-label {
+			.input-modal-icon {
+				font-size: 18px;
+			}
+
+			.input-modal-title {
+				margin: 0;
+				font-size: 16px;
 				font-weight: 600;
-				margin-bottom: 6px;
-				color: var(--text-muted);
-				font-size: 0.9em;
-			}
-
-			.swiftpen-context-text {
-				font-family: var(--font-monospace);
-				font-size: 0.85em;
 				color: var(--text-normal);
-				white-space: pre-wrap;
-				word-break: break-word;
 			}
 
-			.swiftpen-input-container {
-				margin: 20px 0;
+			.input-modal-description {
+				padding: 12px 20px;
+				background: var(--background-secondary);
+				color: var(--text-muted);
+				font-size: 13px;
+				line-height: 1.5;
+				border-bottom: 1px solid var(--background-modifier-border);
 			}
 
-			.swiftpen-input-text {
+			.input-modal-context {
+				padding: 12px 20px;
+				background: var(--background-primary-alt);
+				border-bottom: 1px solid var(--background-modifier-border);
+			}
+
+			.context-label {
+				font-size: 11px;
+				font-weight: 600;
+				color: var(--text-muted);
+				margin-bottom: 6px;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+
+			.context-text {
+				font-family: var(--font-monospace);
+				font-size: 12px;
+				color: var(--text-normal);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				max-height: 40px;
+			}
+
+			.input-modal-input-container {
+				padding: 16px 20px;
+			}
+
+			.input-label {
+				display: block;
+				font-size: 12px;
+				font-weight: 600;
+				color: var(--text-muted);
+				margin-bottom: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+
+			.input-textarea {
 				width: 100%;
-				min-width: 400px;
+				padding: 10px;
+				border: 1px solid var(--background-modifier-border);
+				border-radius: 6px;
+				background: var(--background-primary);
+				color: var(--text-normal);
+				font-family: var(--font-text);
+				font-size: 14px;
+				line-height: 1.6;
+				resize: vertical;
+				outline: none;
+				transition: border-color 0.15s, box-shadow 0.15s;
 			}
 
-			.swiftpen-button-container {
+			.input-textarea:focus {
+				border-color: var(--interactive-accent);
+				box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.1);
+			}
+
+			.input-textarea::placeholder {
+				color: var(--text-faint);
+			}
+
+			.input-modal-hint {
+				padding: 0 20px 12px;
+				font-size: 11px;
+				color: var(--text-faint);
+				text-align: center;
+			}
+
+			.input-modal-hint kbd {
+				padding: 2px 6px;
+				border: 1px solid var(--background-modifier-border);
+				border-radius: 3px;
+				background: var(--background-secondary);
+				font-family: var(--font-monospace);
+				font-size: 10px;
+				color: var(--text-muted);
+			}
+
+			.input-modal-buttons {
 				display: flex;
 				justify-content: flex-end;
-				gap: 10px;
-				margin-top: 20px;
+				gap: 8px;
+				padding: 12px 20px 16px;
+				border-top: 1px solid var(--background-modifier-border);
 			}
 
-			.swiftpen-button {
-				padding: 8px 16px;
-				border-radius: 6px;
+			.btn {
+				padding: 6px 14px;
+				border-radius: 5px;
 				border: none;
-				cursor: pointer;
+				font-size: 13px;
 				font-weight: 500;
-				transition: all 0.2s;
+				cursor: pointer;
+				transition: all 0.15s;
 			}
 
-			.swiftpen-button-cancel {
+			.btn-secondary {
 				background: var(--background-modifier-border);
 				color: var(--text-normal);
 			}
 
-			.swiftpen-button-cancel:hover {
+			.btn-secondary:hover {
 				background: var(--background-modifier-border-hover);
 			}
 
-			.swiftpen-button-submit {
+			.btn-primary {
 				background: var(--interactive-accent);
 				color: var(--text-on-accent);
 			}
 
-			.swiftpen-button-submit:hover:not(:disabled) {
+			.btn-primary:hover:not(:disabled) {
 				background: var(--interactive-accent-hover);
 			}
 
-			.swiftpen-button-submit:disabled {
+			.btn-primary:disabled {
 				opacity: 0.5;
 				cursor: not-allowed;
-			}
-
-			.setting-item-description.mod-warning {
-				color: var(--text-error);
-				background: var(--background-modifier-error);
-				padding: 8px;
-				border-radius: 4px;
-				margin-bottom: 16px;
 			}
 		`;
 
