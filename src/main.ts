@@ -1,19 +1,22 @@
 import { Editor, Notice, Plugin } from "obsidian";
 import { SwiftPenSettings, DEFAULT_SETTINGS, SwiftPenSettingTab } from "./settings";
-import { OpenAIService } from "./openai-service";
+import { AIServiceFactory, IAIService } from "./ai-service";
 import { ContextExtractor } from "./context-extractor";
 import { InputModal } from "./input-modal";
 
 export default class SwiftPenPlugin extends Plugin {
 	settings: SwiftPenSettings;
-	openAIService: OpenAIService;
+	aiService: IAIService;
+	translateService: IAIService;
 	private isGenerating: boolean = false;
+	private isTranslating: boolean = false;
 
 	async onload() {
 		await this.loadSettings();
 
-		// 初始化 OpenAI 服务
-		this.openAIService = new OpenAIService(this.settings);
+		// 初始化 AI 服务
+		this.aiService = AIServiceFactory.create(this.settings);
+		this.translateService = AIServiceFactory.create(this.settings, this.settings.translateProvider);
 
 		// 添加命令：快速写作
 		this.addCommand({
@@ -31,13 +34,29 @@ export default class SwiftPenPlugin extends Plugin {
 			]
 		});
 
-		// 添加命令：取消生成
+		// 添加命令：翻译选中文本
+		this.addCommand({
+			id: "swiftpen-translate",
+			name: "翻译选中文本",
+			icon: "languages",
+			editorCallback: (editor: Editor) => {
+				this.handleTranslate(editor);
+			},
+			hotkeys: [
+				{
+					modifiers: ["Mod", "Shift"],
+					key: "T"
+				}
+			]
+		});
+
+		// 添加命令：取消操作
 		this.addCommand({
 			id: "swiftpen-cancel",
-			name: "取消生成",
+			name: "取消当前操作",
 			icon: "x",
 			callback: () => {
-				this.cancelGeneration();
+				this.cancelAll();
 			},
 			hotkeys: [
 				{
@@ -54,8 +73,8 @@ export default class SwiftPenPlugin extends Plugin {
 	}
 
 	onunload() {
-		// 取消任何正在进行的生成
-		this.cancelGeneration();
+		// 取消任何正在进行的操作
+		this.cancelAll();
 		console.log("SwiftPen 插件已卸载");
 	}
 
@@ -65,10 +84,9 @@ export default class SwiftPenPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		// 更新 OpenAI 服务配置
-		if (this.openAIService) {
-			this.openAIService.updateSettings(this.settings);
-		}
+		// 重新初始化 AI 服务
+		this.aiService = AIServiceFactory.create(this.settings);
+		this.translateService = AIServiceFactory.create(this.settings, this.settings.translateProvider);
 	}
 
 	/**
@@ -81,9 +99,9 @@ export default class SwiftPenPlugin extends Plugin {
 			return;
 		}
 
-		// 检查 API Key
-		if (!this.openAIService.isConfigured()) {
-			new Notice("请先在设置中配置 OpenAI API Key");
+		// 检查 AI 服务配置
+		if (!this.aiService.isConfigured()) {
+			new Notice(`请先在设置中配置 ${this.settings.provider.toUpperCase()} API`);
 			return;
 		}
 
@@ -131,7 +149,7 @@ export default class SwiftPenPlugin extends Plugin {
 			new Notice("正在生成内容... (按 Esc 取消)", 0);
 
 			// 流式生成
-			for await (const chunk of this.openAIService.streamCompletion(
+			for await (const chunk of this.aiService.streamCompletion(
 				textBefore,
 				textAfter,
 				userRequest
@@ -175,14 +193,75 @@ export default class SwiftPenPlugin extends Plugin {
 	}
 
 	/**
-	 * 取消生成
+	 * 处理翻译命令
 	 */
-	private cancelGeneration() {
+	private async handleTranslate(editor: Editor) {
+		// 检查是否正在翻译
+		if (this.isTranslating) {
+			new Notice("正在翻译中，请稍候");
+			return;
+		}
+
+		// 检查是否配置了翻译服务
+		if (!this.translateService.isConfigured()) {
+			new Notice(`请先在设置中配置翻译服务 (${this.settings.translateProvider.toUpperCase()})`);
+			return;
+		}
+
+		// 获取选中文本
+		const selectedText = editor.getSelection();
+		if (!selectedText || selectedText.trim().length === 0) {
+			new Notice("请先选中要翻译的文本");
+			return;
+		}
+
+		this.isTranslating = true;
+		const selection = editor.listSelections()[0];
+
+		try {
+			new Notice("正在翻译...", 0);
+
+			// 调用翻译服务
+			const translated = await this.translateService.translate(
+				selectedText,
+				this.settings.translateTargetLang,
+				this.settings.translateSourceLang
+			);
+
+			// 清除通知
+			this.clearNotices();
+
+			// 替换选中的文本
+			editor.replaceRange(translated, selection.anchor, selection.head);
+
+			// 显示成功通知
+			new Notice(`✓ 翻译完成`, 2000);
+
+		} catch (error) {
+			this.clearNotices();
+			new Notice(`✗ 翻译失败: ${error.message}`, 5000);
+			console.error("SwiftPen 翻译错误:", error);
+		} finally {
+			this.isTranslating = false;
+		}
+	}
+
+	/**
+	 * 取消所有操作
+	 */
+	private cancelAll() {
 		if (this.isGenerating) {
-			this.openAIService.cancel();
+			this.aiService.cancel();
 			this.clearNotices();
 			new Notice("已取消生成", 2000);
 			this.isGenerating = false;
+		}
+		
+		if (this.isTranslating) {
+			this.translateService.cancel();
+			this.clearNotices();
+			new Notice("已取消翻译", 2000);
+			this.isTranslating = false;
 		}
 	}
 

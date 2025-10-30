@@ -1,9 +1,9 @@
 {
   "id": "swiftpen",
   "name": "SwiftPen",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "minAppVersion": "0.15.0",
-  "description": "使用 AI 快速完成内容编写。按快捷键输入需求，让 AI 帮你完成剩余内容。",
+  "description": "AI 智能写作助手。支持 OpenAI、Gemini 等多种 AI 服务，快速写作、一键翻译，让创作更轻松！",
   "author": "wangliang",
   "authorUrl": "",
   "fundingUrl": "",
