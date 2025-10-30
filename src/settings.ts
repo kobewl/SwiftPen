@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import SwiftPenPlugin from "./main";
 
 export type AIProvider = "openai" | "gemini" | "custom";
@@ -37,6 +37,11 @@ export interface SwiftPenSettings {
 	// 性能优化
 	enableCache: boolean;
 	cacheTimeout: number; // 缓存超时时间（分钟）
+	
+	// UI 配置
+	showGenerationMarkers: boolean; // 是否显示生成标记
+	generationStartMarker: string; // 生成开始标记
+	generationEndMarker: string; // 生成结束标记
 }
 
 export const DEFAULT_SETTINGS: SwiftPenSettings = {
@@ -71,7 +76,12 @@ export const DEFAULT_SETTINGS: SwiftPenSettings = {
 	
 	// 性能
 	enableCache: true,
-	cacheTimeout: 30
+	cacheTimeout: 30,
+	
+	// UI
+	showGenerationMarkers: true,
+	generationStartMarker: "\n\n---AI 生成开始---\n\n",
+	generationEndMarker: "\n\n---AI 生成结束---\n\n"
 };
 
 export class SwiftPenSettingTab extends PluginSettingTab {
@@ -389,6 +399,42 @@ export class SwiftPenSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// ===== 快捷键说明 =====
+		containerEl.createEl("h3", { text: "快捷键" });
+		
+		const hotkeysDesc = containerEl.createDiv({ cls: "setting-item-description" });
+		hotkeysDesc.createEl("p", { text: "💡 提示：你可以在 Obsidian 设置 → 快捷键 中搜索 'SwiftPen' 来自定义快捷键" });
+		hotkeysDesc.createEl("br");
+		hotkeysDesc.createEl("strong", { text: "默认快捷键：" });
+		
+		const hotkeysList = hotkeysDesc.createEl("ul");
+		hotkeysList.createEl("li").innerHTML = "<code>Ctrl/Cmd+Shift+L</code> - 快速写作（AI 续写）";
+		hotkeysList.createEl("li").innerHTML = "<code>Ctrl/Cmd+Shift+T</code> - 翻译选中文本";
+		hotkeysList.createEl("li").innerHTML = "<code>Esc</code> - 取消当前操作";
+
+		// ===== API 测试 =====
+		containerEl.createEl("h3", { text: "API 测试" });
+
+		new Setting(containerEl)
+			.setName("测试 AI 连接")
+			.setDesc("测试当前配置的 AI 服务是否可以正常连接")
+			.addButton((button) => {
+				button
+					.setButtonText("测试连接")
+					.setCta()
+					.onClick(async () => {
+						button.setDisabled(true);
+						button.setButtonText("测试中...");
+						try {
+							await this.testAIConnection();
+						} finally {
+							button.setDisabled(false);
+							button.setButtonText("测试连接");
+						}
+					});
+				button.buttonEl.addClass("swiftpen-test-button");
+			});
+
 		// ===== 性能优化 =====
 		containerEl.createEl("h3", { text: "性能优化" });
 
@@ -419,6 +465,86 @@ export class SwiftPenSettingTab extends PluginSettingTab {
 						}
 					})
 			);
+
+		// ===== UI 配置 =====
+		containerEl.createEl("h3", { text: "界面配置" });
+
+		new Setting(containerEl)
+			.setName("显示生成标记")
+			.setDesc("在 AI 生成的内容前后添加标记，便于区分")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showGenerationMarkers)
+					.onChange(async (value) => {
+						this.plugin.settings.showGenerationMarkers = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("生成开始标记")
+			.setDesc("AI 生成内容的开始标记")
+			.addText((text) =>
+				text
+					.setPlaceholder("---AI 生成开始---")
+					.setValue(this.plugin.settings.generationStartMarker)
+					.onChange(async (value) => {
+						this.plugin.settings.generationStartMarker = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("生成结束标记")
+			.setDesc("AI 生成内容的结束标记")
+			.addText((text) =>
+				text
+					.setPlaceholder("---AI 生成结束---")
+					.setValue(this.plugin.settings.generationEndMarker)
+					.onChange(async (value) => {
+						this.plugin.settings.generationEndMarker = value;
+						await this.plugin.saveSettings();
+					})
+			);
+	}
+
+	/**
+	 * 测试 AI 连接
+	 */
+	private async testAIConnection() {
+		try {
+			// 获取当前服务
+			const service = this.plugin.aiService;
+			
+			if (!service.isConfigured()) {
+				new Notice("❌ 请先配置 AI 服务", 5000);
+				return;
+			}
+
+			// 测试简单的生成
+			let testResult = "";
+			let hasContent = false;
+
+			for await (const chunk of service.streamCompletion(
+				"这是一个测试",
+				"",
+				"请回复：连接成功"
+			)) {
+				testResult += chunk;
+				hasContent = true;
+				if (testResult.length > 50) break; // 只测试前 50 个字符
+			}
+
+			if (hasContent) {
+				new Notice("✅ AI 连接测试成功！", 5000);
+			} else {
+				new Notice("⚠️ 连接成功但未收到响应", 5000);
+			}
+
+		} catch (error) {
+			console.error("API 测试失败:", error);
+			new Notice(`❌ 连接失败: ${error.message}`, 5000);
+		}
 	}
 }
 

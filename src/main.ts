@@ -3,6 +3,7 @@ import { SwiftPenSettings, DEFAULT_SETTINGS, SwiftPenSettingTab } from "./settin
 import { AIServiceFactory, IAIService } from "./ai-service";
 import { ContextExtractor } from "./context-extractor";
 import { InputModal } from "./input-modal";
+import { TranslationModal } from "./translation-modal";
 
 export default class SwiftPenPlugin extends Plugin {
 	settings: SwiftPenSettings;
@@ -144,11 +145,23 @@ export default class SwiftPenPlugin extends Plugin {
 		this.isGenerating = true;
 		const startCursor = editor.getCursor();
 		let generatedText = "";
+		let markerInserted = false;
 
 		try {
-			new Notice("正在生成内容... (按 Esc 取消)", 0);
+			new Notice("🤖 AI 正在生成内容... (按 Esc 取消)", 0);
+
+			// 插入开始标记
+			if (this.settings.showGenerationMarkers) {
+				editor.replaceRange(
+					this.settings.generationStartMarker,
+					startCursor,
+					startCursor
+				);
+				markerInserted = true;
+			}
 
 			// 流式生成
+			let isFirstChunk = true;
 			for await (const chunk of this.aiService.streamCompletion(
 				textBefore,
 				textAfter,
@@ -157,23 +170,34 @@ export default class SwiftPenPlugin extends Plugin {
 				generatedText += chunk;
 
 				// 实时插入到编辑器
-				const currentText = editor.getRange(startCursor, editor.getCursor());
-				const newText = generatedText.substring(currentText.length);
+				const currentCursor = editor.getCursor();
+				editor.replaceRange(chunk, currentCursor, currentCursor);
 
-				if (newText) {
-					editor.replaceRange(
-						newText,
-						editor.getCursor(),
-						editor.getCursor()
-					);
+				// 第一个内容块到达时的提示
+				if (isFirstChunk) {
+					this.clearNotices();
+					new Notice("✨ 正在生成中...", 0);
+					isFirstChunk = false;
 				}
+			}
+
+			// 插入结束标记
+			if (this.settings.showGenerationMarkers) {
+				const endCursor = editor.getCursor();
+				editor.replaceRange(
+					this.settings.generationEndMarker,
+					endCursor,
+					endCursor
+				);
 			}
 
 			// 清除通知
 			this.clearNotices();
 
 			// 显示成功通知
-			new Notice(`✓ 已生成 ${generatedText.length} 个字符`, 3000);
+			const charCount = generatedText.length;
+			const wordCount = generatedText.split(/\s+/).length;
+			new Notice(`✅ 生成完成！${charCount} 字符 / ${wordCount} 词`, 3000);
 
 		} catch (error) {
 			// 清除通知
@@ -181,9 +205,27 @@ export default class SwiftPenPlugin extends Plugin {
 
 			// 如果已经生成了一部分内容，保留它
 			if (generatedText.length > 0) {
-				new Notice(`⚠ 生成中断，已保留 ${generatedText.length} 个字符`, 4000);
+				// 添加结束标记
+				if (this.settings.showGenerationMarkers && markerInserted) {
+					const endCursor = editor.getCursor();
+					editor.replaceRange(
+						this.settings.generationEndMarker,
+						endCursor,
+						endCursor
+					);
+				}
+				new Notice(`⚠️ 生成中断，已保留 ${generatedText.length} 个字符`, 4000);
 			} else {
-				new Notice(`✗ 生成失败: ${error.message}`, 5000);
+				// 如果什么都没生成，删除开始标记
+				if (this.settings.showGenerationMarkers && markerInserted) {
+					const endCursor = editor.getCursor();
+					editor.replaceRange(
+						"",
+						startCursor,
+						endCursor
+					);
+				}
+				new Notice(`❌ 生成失败: ${error.message}`, 5000);
 			}
 
 			console.error("SwiftPen 生成错误:", error);
@@ -219,7 +261,7 @@ export default class SwiftPenPlugin extends Plugin {
 		const selection = editor.listSelections()[0];
 
 		try {
-			new Notice("正在翻译...", 0);
+			new Notice("🌍 正在翻译...", 0);
 
 			// 调用翻译服务
 			const translated = await this.translateService.translate(
@@ -231,15 +273,30 @@ export default class SwiftPenPlugin extends Plugin {
 			// 清除通知
 			this.clearNotices();
 
-			// 替换选中的文本
-			editor.replaceRange(translated, selection.anchor, selection.head);
+			// 显示翻译对话框
+			const modal = new TranslationModal(
+				this.app,
+				selectedText,
+				translated,
+				this.settings.translateSourceLang,
+				this.settings.translateTargetLang,
+				(finalText: string) => {
+					// 用户选择替换
+					editor.replaceRange(finalText, selection.anchor, selection.head);
+					const targetLangName = this.getLangName(this.settings.translateTargetLang);
+					new Notice(`✅ 已替换为${targetLangName}`, 2000);
+				},
+				() => {
+					// 用户取消
+					new Notice("已取消", 1000);
+				}
+			);
 
-			// 显示成功通知
-			new Notice(`✓ 翻译完成`, 2000);
+			modal.open();
 
 		} catch (error) {
 			this.clearNotices();
-			new Notice(`✗ 翻译失败: ${error.message}`, 5000);
+			new Notice(`❌ 翻译失败: ${error.message}`, 5000);
 			console.error("SwiftPen 翻译错误:", error);
 		} finally {
 			this.isTranslating = false;
@@ -263,6 +320,24 @@ export default class SwiftPenPlugin extends Plugin {
 			new Notice("已取消翻译", 2000);
 			this.isTranslating = false;
 		}
+	}
+
+	/**
+	 * 获取语言名称
+	 */
+	private getLangName(code: string): string {
+		const langMap: Record<string, string> = {
+			"zh-CN": "简体中文",
+			"zh-TW": "繁体中文",
+			"en": "英语",
+			"ja": "日语",
+			"ko": "韩语",
+			"fr": "法语",
+			"de": "德语",
+			"es": "西班牙语",
+			"ru": "俄语"
+		};
+		return langMap[code] || code;
 	}
 
 	/**

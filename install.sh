@@ -62,18 +62,26 @@ if [ -d "$TARGET_DIR" ]; then
     rm -rf "$TARGET_DIR"
 fi
 
+# 检查是否存在 dist 目录
+SOURCE_DIR="dist"
+if [ ! -d "$SOURCE_DIR" ]; then
+    echo -e "${RED}❌ 错误: 未找到 dist 目录${NC}"
+    echo -e "${YELLOW}请先运行: npm run build${NC}"
+    exit 1
+fi
+
 # 检查必要文件是否存在
 REQUIRED_FILES=("main.js" "manifest.json")
 MISSING_FILES=()
 
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$file" ]; then
+    if [ ! -f "$SOURCE_DIR/$file" ]; then
         MISSING_FILES+=("$file")
     fi
 done
 
 if [ ${#MISSING_FILES[@]} -gt 0 ]; then
-    echo -e "${RED}❌ 错误: 缺少必要文件:${NC}"
+    echo -e "${RED}❌ 错误: dist 目录中缺少必要文件:${NC}"
     for file in "${MISSING_FILES[@]}"; do
         echo -e "${RED}   - $file${NC}"
     done
@@ -90,12 +98,12 @@ mkdir -p "$TARGET_DIR"
 
 # 复制文件
 echo -e "${YELLOW}→ 复制文件...${NC}"
-cp main.js "$TARGET_DIR/"
-cp manifest.json "$TARGET_DIR/"
+cp "$SOURCE_DIR/main.js" "$TARGET_DIR/"
+cp "$SOURCE_DIR/manifest.json" "$TARGET_DIR/"
 
 # 检查是否有 styles.css
-if [ -f "styles.css" ]; then
-    cp styles.css "$TARGET_DIR/"
+if [ -f "$SOURCE_DIR/styles.css" ]; then
+    cp "$SOURCE_DIR/styles.css" "$TARGET_DIR/"
     echo -e "${GREEN}  ✓ 复制 styles.css${NC}"
 fi
 

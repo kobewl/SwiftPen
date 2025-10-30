@@ -1,13 +1,13 @@
 {
-    "name": "swiftpen",
-    "version": "2.0.0",
-    "description": "AI 智能写作助手 - 支持多种 AI 服务、快速写作、一键翻译",
+  "name": "swiftpen",
+  "version": "2.1.0",
+  "description": "AI 智能写作助手 - 支持多种 AI 服务、快速写作、一键翻译",
     "main": "main.js",
-    "scripts": {
-        "dev": "node esbuild.config.mjs",
-        "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-        "version": "node version-bump.mjs && git add manifest.json versions.json"
-    },
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && node scripts/copy-files.js",
+    "version": "node version-bump.mjs && git add manifest.json versions.json"
+  },
     "keywords": [
         "obsidian",
         "plugin",
